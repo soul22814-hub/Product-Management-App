@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Product Management App</title>
+
+  <style>
+    /* Basic, clean styling */
+    :root{
+      --bg:#f6f8fa;
+      --card:#ffffff;
+      --accent:#2563eb;
+      --muted:#6b7280;
+      --danger:#ef4444;
+      --success:#10b981;
+      --radius:12px;
+      --shadow: 0 6px 20px rgba(16,24,40,0.06);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+
+    html,body{
+      height:100%;
+      margin:0;
+      background:var(--bg);
+      color:#111827;
+    }
+
+    .wrap{
+      max-width:880px;
+      margin:36px auto;
+      padding:24px;
+    }
+
+    .card{
+      background:var(--card);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:20px;
+      margin-bottom:18px;
+    }
+
+    header h1{
+      margin:0 0 6px 0;
+      font-size:20px;
+    }
+    header p { margin:0; color:var(--muted); font-size:14px; }
+
+    form.row{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      margin-top:16px;
+    }
+
+    input[type="text"]{
+      flex:1;
+      padding:10px 12px;
+      border-radius:10px;
+      border:1px solid #e5e7eb;
+      font-size:14px;
+      outline:none;
+    }
+    input[type="text"]:focus{ box-shadow:0 0 0 4px rgba(37,99,235,0.06); border-color:var(--accent); }
+
+    button{
+      padding:10px 14px;
+      background:var(--accent);
+      color:white;
+      border:none;
+      border-radius:10px;
+      cursor:pointer;
+      font-weight:600;
+    }
+    button:disabled{ opacity:0.6; cursor:not-allowed; }
+
+    .table-wrapper{
+      overflow:auto;
+    }
+    table{
+      width:100%;
+      border-collapse:collapse;
+      margin-top:14px;
+      font-size:14px;
+    }
+    th,td{
+      text-align:left;
+      padding:12px 10px;
+      border-bottom:1px solid #f1f5f9;
+    }
+    th{ color:var(--muted); font-size:13px; font-weight:600; }
+    td .name { font-weight:600; color:#111827 }
+
+    .btn-edit, .btn-delete {
+      padding:6px 8px;
+      border-radius:8px;
+      border: none;
+      cursor: pointer;
+      font-size:13px;
+    }
+    .btn-edit { background:#fde68a; color:#92400e; margin-right:8px; }
+    .btn-delete { background:#fee2e2; color:var(--danger); }
+
+    .small-muted{ color:var(--muted); font-size:13px; margin-top:8px; }
+
+    .status {
+      display:inline-block;
+      margin-left:8px;
+      font-size:13px;
+      color:var(--muted);
+    }
+
+    .footer-note{
+      color:var(--muted);
+      font-size:13px;
+      margin-top:12px;
+    }
+
+    @media (max-width:520px){
+      form.row{ flex-direction:column; align-items:stretch; }
+      button{ width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <header>
+        <h1>Product Management App</h1>
+        <p>Simple CRUD demo using Supabase (Postgres) — add, edit, delete products.</p>
+      </header>
+
+      <!-- Form -->
+      <form id="product-form" class="row" onsubmit="return false;">
+        <input id="product-name" type="text" placeholder="Enter product name" aria-label="Product name" required />
+        <button id="add-btn" type="button">Add Product</button>
+        <span id="op-status" class="status" aria-live="polite"></span>
+      </form>
+
+      <div class="small-muted">
+        Table structure expected on Supabase:
+        <code style="display:inline-block;margin-left:8px">id (auto-increment), name (text not null)</code>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Products</h3>
+      <div class="table-wrapper">
+        <table id="products-table" aria-label="Products table">
+          <thead>
+            <tr>
+              <th style="width:65%">Product Name</th>
+              <th style="width:35%">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="products-body">
+            <!-- rows injected here -->
+          </tbody>
+        </table>
+      </div>
+
+      <div id="empty-note" class="footer-note" style="display:none">No products yet. Add one above.</div>
+    </div>
+
+    <div class="card" style="text-align:center;font-size:13px;color:var(--muted)">
+      <div>⚠️ Replace the Supabase URL and anon key below with your project's values.</div>
+      <div style="margin-top:8px">For production, secure your keys and use Row Level Security and policies.</div>
+    </div>
+  </div>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+  <script>
+  /*************************************************************************
+   * IMPORTANT:
+   * Replace the placeholders below with your Supabase project values:
+   *  - supabaseUrl: your project URL (e.g. https://xxxx.supabase.co)
+   *  - supabaseKey: your anon/public key (for client-side demo)
+   *
+   * Table expected: public.products
+   * Columns:
+   *   id   BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY
+   *   name TEXT NOT NULL
+   *
+   * NOTE: The snippet requested by you is included exactly as asked:
+   *************************************************************************/
+
+  const { createClient } = supabase;   // using the global provided by the CDN
+  const supabaseUrl = 'https://dfywpuonatkihgpyucqo.supabase.co';  // Replace with your Supabase URL
+  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmeXdwdW9uYXRraWhncHl1Y3FvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ4NDIyOTQsImV4cCI6MjA4MDQxODI5NH0.NrhLXy8m8Aown7xn1P2jABos1GAMeI6leYK1Q1ebGdw';  // Replace with your Supabase Key
+  const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
+  // -----------------------
+  // DOM references
+  // -----------------------
+  const productNameInput = document.getElementById('product-name');
+  const addBtn = document.getElementById('add-btn');
+  const productsBody = document.getElementById('products-body');
+  const opStatus = document.getElementById('op-status');
+  const emptyNote = document.getElementById('empty-note');
+
+  // Utility: show temporary status
+  function showStatus(msg, timeout = 2500) {
+    opStatus.textContent = msg;
+    if (timeout) {
+      setTimeout(() => {
+        // only clear if still the same message
+        if (opStatus.textContent === msg) opStatus.textContent = '';
+      }, timeout);
+    }
+  }
+
+  // Fetch products and render
+  async function fetchProducts() {
+    productsBody.innerHTML = '';
+    showStatus('Loading...');
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .select('id, name')
+        .order('id', { ascending: true });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        emptyNote.style.display = 'block';
+        showStatus('');
+        return;
+      } else {
+        emptyNote.style.display = 'none';
+      }
+
+      for (const p of data) {
+        const tr = document.createElement('tr');
+        tr.dataset.id = p.id;
+
+        tr.innerHTML = `
+          <td>
+            <span class="name" data-name>${escapeHtml(p.name)}</span>
+          </td>
+          <td>
+            <button class="btn-edit" data-action="edit">Edit</button>
+            <button class="btn-delete" data-action="delete">Delete</button>
+          </td>
+        `;
+        productsBody.appendChild(tr);
+      }
+      showStatus('');
+    } catch (err) {
+      console.error('Fetch error', err);
+      showStatus('Error loading products');
+    }
+  }
+
+  // Insert new product
+  async function addProduct() {
+    const name = (productNameInput.value || '').trim();
+    if (!name) {
+      showStatus('Please enter a product name');
+      return;
+    }
+    addBtn.disabled = true;
+    showStatus('Adding...');
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .insert([{ name }])
+        .select('id, name')
+        .single();
+
+      if (error) throw error;
+
+      productNameInput.value = '';
+      showStatus('Product added ✔️');
+      // append the new product row to the table
+      await fetchProducts();
+    } catch (err) {
+      console.error('Insert error', err);
+      showStatus('Failed to add product');
+    } finally {
+      addBtn.disabled = false;
+    }
+  }
+
+  // Edit product name (prompt-based)
+  async function editProduct(row) {
+    const id = row.dataset.id;
+    const nameSpan = row.querySelector('[data-name]');
+    const oldName = nameSpan.textContent;
+    const newName = prompt('Update product name:', oldName);
+    if (newName === null) return; // cancelled
+    const trimmed = (newName || '').trim();
+    if (!trimmed) {
+      alert('Product name cannot be empty.');
+      return;
+    }
+    showStatus('Updating...');
+    try {
+      const { data, error } = await supabaseClient
+        .from('products')
+        .update({ name: trimmed })
+        .eq('id', id)
+        .select('id, name')
+        .single();
+
+      if (error) throw error;
+
+      nameSpan.textContent = data.name;
+      showStatus('Updated ✔️');
+    } catch (err) {
+      console.error('Update error', err);
+      showStatus('Failed to update');
+    }
+  }
+
+  // Delete product
+  async function deleteProduct(row) {
+    const id = row.dataset.id;
+    const name = row.querySelector('[data-name]').textContent;
+    const ok = confirm(`Delete "${name}" ?`);
+    if (!ok) return;
+    showStatus('Deleting...');
+    try {
+      const { error } = await supabaseClient
+        .from('products')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      row.remove();
+      // if table empty, show note
+      if (!productsBody.querySelector('tr')) emptyNote.style.display = 'block';
+      showStatus('Deleted ✔️');
+    } catch (err) {
+      console.error('Delete error', err);
+      showStatus('Failed to delete');
+    }
+  }
+
+  // Event delegation for edit/delete buttons
+  productsBody.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button');
+    if (!btn) return;
+    const tr = ev.target.closest('tr');
+    const action = btn.dataset.action;
+    if (!tr || !action) return;
+    if (action === 'edit') {
+      await editProduct(tr);
+    } else if (action === 'delete') {
+      await deleteProduct(tr);
+    }
+  });
+
+  // Attach add button
+  addBtn.addEventListener('click', addProduct);
+
+  // Pressing Enter inside input should add
+  productNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addProduct();
+    }
+  });
+
+  // Escape HTML to avoid injection in display
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  // On load: fetch products
+  (async function init() {
+    // quick check: if placeholders still present, hint user
+    if (supabaseUrl.includes('your-supabase-url') || supabaseKey.includes('your-anon-key')) {
+      showStatus('Replace Supabase URL & Key in the script to connect.');
+    } else {
+      showStatus('Connecting...');
+    }
+
+    await fetchProducts();
+  })();
+  </script>
+</body>
+</html>
